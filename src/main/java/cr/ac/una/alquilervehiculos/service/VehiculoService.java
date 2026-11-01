@@ -3,6 +3,9 @@ package cr.ac.una.alquilervehiculos.service;
 import cr.ac.una.alquilervehiculos.interfaces.VehiculoRepository;
 import cr.ac.una.alquilervehiculos.model.EstadoVehiculo;
 import cr.ac.una.alquilervehiculos.model.Vehiculo;
+import cr.ac.una.alquilervehiculos.model.Moto;
+import cr.ac.una.alquilervehiculos.model.Bicimoto;
+import cr.ac.una.alquilervehiculos.model.Cuadraciclo;
 import cr.ac.una.alquilervehiculos.repository.VehiculoRepositoryJDBC;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -20,12 +23,19 @@ public class VehiculoService {
     /** Valida y registra un vehículo. */
     public void registrarVehiculo(Vehiculo vehiculo) {
         if (vehiculo == null) throw new IllegalArgumentException("Debe ingresar un vehículo.");
-        if (vehiculo.getPlaca() == null || vehiculo.getPlaca().trim().isEmpty())
-            throw new IllegalArgumentException("La placa es obligatoria.");
-        if (vehiculo.getMarca() == null || vehiculo.getMarca().trim().isEmpty())
-            throw new IllegalArgumentException("La marca es obligatoria.");
-        if (!Double.isFinite(vehiculo.getTarifaDiaria()) || vehiculo.getTarifaDiaria() <= 0)
-            throw new IllegalArgumentException("La tarifa diaria debe ser mayor a cero.");
+        vehiculo.setPlaca(Validaciones.placa(vehiculo.getPlaca()));
+        vehiculo.setMarca(Validaciones.marca(vehiculo.getMarca()));
+        Validaciones.montoValido(vehiculo.getTarifaDiaria(), "La tarifa diaria");
+        if (vehiculo instanceof Moto moto) {
+            if (moto.getCilindrada() <= 0)
+                throw new IllegalArgumentException("La cilindrada debe ser mayor que cero.");
+        } else if (vehiculo instanceof Bicimoto bicimoto) {
+            bicimoto.setTipoMotor(Validaciones.tipoMotor(bicimoto.getTipoMotor()));
+        } else if (vehiculo instanceof Cuadraciclo cuadraciclo) {
+            cuadraciclo.setTipoTraccion(Validaciones.tipoTraccion(cuadraciclo.getTipoTraccion()));
+        } else {
+            throw new IllegalArgumentException("El tipo de vehículo no es válido.");
+        }
         if (buscarPorPlaca(vehiculo.getPlaca()) != null)
             throw new IllegalArgumentException("Ya existe un vehículo con esa placa.");
         try {
@@ -67,11 +77,9 @@ public class VehiculoService {
     public boolean actualizarVehiculo(String placa, String marca, double tarifaDiaria) {
         Vehiculo vehiculo = buscarPorPlaca(placa);
         if (vehiculo == null) return false;
-        if (marca == null || marca.trim().isEmpty())
-            throw new IllegalArgumentException("La marca es obligatoria.");
-        if (!Double.isFinite(tarifaDiaria) || tarifaDiaria <= 0)
-            throw new IllegalArgumentException("La tarifa diaria debe ser mayor a cero.");
-        vehiculo.setMarca(marca);
+        String marcaLimpia = Validaciones.marca(marca);
+        Validaciones.montoValido(tarifaDiaria, "La tarifa diaria");
+        vehiculo.setMarca(marcaLimpia);
         vehiculo.setTarifaDiaria(tarifaDiaria);
         return actualizarEnBD(vehiculo);
     }

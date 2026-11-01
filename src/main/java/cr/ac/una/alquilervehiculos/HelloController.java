@@ -10,9 +10,12 @@ import cr.ac.una.alquilervehiculos.service.AlquilerService;
 import cr.ac.una.alquilervehiculos.service.ClienteService;
 import cr.ac.una.alquilervehiculos.service.ClienteEliminacionService;
 import cr.ac.una.alquilervehiculos.service.VehiculoService;
+import cr.ac.una.alquilervehiculos.service.Validaciones;
 import javafx.fxml.FXML;
+import javafx.event.ActionEvent;
 import javafx.concurrent.Task;
 import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
@@ -113,6 +116,13 @@ public class HelloController {
         tipoVehiculoCombo.getItems().addAll(
                 "Moto", "Bicimoto", "Cuadraciclo"
         );
+        tipoVehiculoCombo.setEditable(false);
+        clienteAlquilerCombo.setEditable(false);
+        vehiculoAlquilerCombo.setEditable(false);
+        devolucionCombo.setEditable(false);
+        fechaInicioPicker.setEditable(false);
+        fechaDevolucionPicker.setEditable(false);
+        diasSpinner.setEditable(false);
         tipoVehiculoCombo.getSelectionModel().selectFirst();
         actualizarCaracteristica();
 
@@ -163,8 +173,8 @@ public class HelloController {
             Cliente cliente = new Cliente(
                     identificacionField.getText().trim(),
                     nombreField.getText().trim(),
-                    telefonoField.getText(),
-                    correoField.getText()
+                    telefonoField.getText().trim(),
+                    correoField.getText().trim()
             );
             clienteService.registrarCliente(cliente);
             limpiarCamposCliente();
@@ -187,7 +197,9 @@ public class HelloController {
     private void registrarVehiculo() {
         try {
             String tipo = tipoVehiculoCombo.getValue();
-            validarTexto(tipo, "el tipo de vehículo");
+            if (tipo == null || !tipoVehiculoCombo.getItems().contains(tipo)) {
+                throw new IllegalArgumentException("Seleccione un tipo de vehículo válido.");
+            }
             validarTexto(placaField.getText(), "la placa");
             validarTexto(marcaField.getText(), "la marca");
             validarTexto(caracteristicaField.getText(), "la característica");
@@ -205,8 +217,10 @@ public class HelloController {
                 );
             } else if ("Bicimoto".equals(tipo)) {
                 vehiculo = new Bicimoto(placa, marca, tarifa, caracteristica);
-            } else {
+            } else if ("Cuadraciclo".equals(tipo)) {
                 vehiculo = new Cuadraciclo(placa, marca, tarifa, caracteristica);
+            } else {
+                throw new IllegalArgumentException("El tipo de vehículo no es válido.");
             }
 
             vehiculoService.registrarVehiculo(vehiculo);
@@ -229,15 +243,17 @@ public class HelloController {
     @FXML
     private void registrarAlquiler() {
         try {
-            if (clienteAlquilerCombo.getValue() == null) {
-                throw new IllegalArgumentException(
-                        "Debe seleccionar un cliente."
-                );
+            if (clienteAlquilerCombo.getValue() == null
+                    || !clienteAlquilerCombo.getItems().contains(clienteAlquilerCombo.getValue())) {
+                throw new IllegalArgumentException("Debe seleccionar un cliente válido.");
             }
-            if (vehiculoAlquilerCombo.getValue() == null) {
-                throw new IllegalArgumentException(
-                        "Debe seleccionar un vehículo disponible."
-                );
+            if (vehiculoAlquilerCombo.getValue() == null
+                    || !vehiculoAlquilerCombo.getItems().contains(vehiculoAlquilerCombo.getValue())) {
+                throw new IllegalArgumentException("Debe seleccionar un vehículo disponible.");
+            }
+            if (diasSpinner.getValue() == null || diasSpinner.getValue() < 1
+                    || diasSpinner.getValue() > 365) {
+                throw new IllegalArgumentException("Seleccione una cantidad de días entre 1 y 365.");
             }
             if (fechaInicioPicker.getValue() == null) {
                 throw new IllegalArgumentException(
@@ -320,10 +336,9 @@ public class HelloController {
     @FXML
     private void devolverVehiculo() {
         try {
-            if (devolucionCombo.getValue() == null) {
-                throw new IllegalArgumentException(
-                        "Debe seleccionar un alquiler activo."
-                );
+            if (devolucionCombo.getValue() == null
+                    || !devolucionCombo.getItems().contains(devolucionCombo.getValue())) {
+                throw new IllegalArgumentException("Debe seleccionar un alquiler activo válido.");
             }
             if (fechaDevolucionPicker.getValue() == null) {
                 throw new IllegalArgumentException(
@@ -354,8 +369,10 @@ public class HelloController {
             caracteristicaLabel.setText("Cilindrada (cc)");
         } else if ("Bicimoto".equals(tipo)) {
             caracteristicaLabel.setText("Tipo de motor");
-        } else {
+        } else if ("Cuadraciclo".equals(tipo)) {
             caracteristicaLabel.setText("Tipo de tracción");
+        } else {
+            caracteristicaLabel.setText("Característica");
         }
     }
 
@@ -375,14 +392,13 @@ public class HelloController {
         }
 
         double costo = vehiculo.calcularCostoAlquiler(diasSpinner.getValue());
-        double deposito = 0;
-        try {
-            deposito = convertirDouble(depositoField.getText(), "el depósito");
-        } catch (IllegalArgumentException ignored) {
-            // El campo se valida al confirmar el alquiler.
-        }
         costoAlquilerLabel.setText(dinero(costo));
-        totalAlquilerLabel.setText(dinero(costo + deposito));
+        try {
+            double deposito = convertirDouble(depositoField.getText(), "el depósito");
+            totalAlquilerLabel.setText(dinero(costo + deposito));
+        } catch (IllegalArgumentException e) {
+            totalAlquilerLabel.setText("Ingrese un depósito válido");
+        }
     }
 
     /**
@@ -465,19 +481,28 @@ public class HelloController {
         formulario.addRow(2, new Label("Correo:"), correo);
         dialogo.getDialogPane().setContent(formulario);
 
-        if (dialogo.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) return;
-        try {
-            boolean actualizado = clienteService.actualizarCliente(
-                    seleccionado.getIdentificacion(), nombre.getText().trim(),
-                    telefono.getText().trim(), correo.getText().trim());
-            if (!actualizado) {
-                mostrarError("El cliente ya no existe en MySQL.");
-                return;
+        Button aceptar = (Button) dialogo.getDialogPane().lookupButton(ButtonType.OK);
+        aceptar.addEventFilter(ActionEvent.ACTION, evento -> {
+            try {
+                boolean actualizado = clienteService.actualizarCliente(
+                        seleccionado.getIdentificacion(), nombre.getText(),
+                        telefono.getText(), correo.getText());
+                if (!actualizado) {
+                    mostrarError("El cliente ya no existe en MySQL.");
+                    evento.consume();
+                }
+            } catch (RuntimeException e) {
+                mostrarError(e.getMessage());
+                evento.consume(); // Conserva el formulario para que se corrijan los datos.
             }
-            actualizarListas();
-            mostrarInformacion("Cliente actualizado correctamente en MySQL.");
-        } catch (RuntimeException e) {
-            mostrarError(e.getMessage());
+        });
+        if (dialogo.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
+            try {
+                actualizarListas();
+                mostrarInformacion("Cliente actualizado correctamente en MySQL.");
+            } catch (RuntimeException e) {
+                mostrarError(e.getMessage());
+            }
         }
     }
 
@@ -506,19 +531,28 @@ public class HelloController {
         formulario.addRow(1, new Label("Tarifa diaria:"), tarifa);
         dialogo.getDialogPane().setContent(formulario);
 
-        if (dialogo.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) return;
-        try {
-            double tarifaNueva = convertirDouble(tarifa.getText(), "la tarifa diaria");
-            boolean actualizado = vehiculoService.actualizarVehiculo(
-                    seleccionado.getPlaca(), marca.getText().trim(), tarifaNueva);
-            if (!actualizado) {
-                mostrarError("El vehículo ya no existe en MySQL.");
-                return;
+        Button aceptar = (Button) dialogo.getDialogPane().lookupButton(ButtonType.OK);
+        aceptar.addEventFilter(ActionEvent.ACTION, evento -> {
+            try {
+                double tarifaNueva = convertirDouble(tarifa.getText(), "la tarifa diaria");
+                boolean actualizado = vehiculoService.actualizarVehiculo(
+                        seleccionado.getPlaca(), marca.getText(), tarifaNueva);
+                if (!actualizado) {
+                    mostrarError("El vehículo ya no existe en MySQL.");
+                    evento.consume();
+                }
+            } catch (RuntimeException e) {
+                mostrarError(e.getMessage());
+                evento.consume(); // Permite corregir la tarifa o la marca.
             }
-            actualizarListas();
-            mostrarInformacion("Vehículo actualizado correctamente en MySQL.");
-        } catch (RuntimeException e) {
-            mostrarError(e.getMessage());
+        });
+        if (dialogo.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
+            try {
+                actualizarListas();
+                mostrarInformacion("Vehículo actualizado correctamente en MySQL.");
+            } catch (RuntimeException e) {
+                mostrarError(e.getMessage());
+            }
         }
     }
 
@@ -664,19 +698,7 @@ public class HelloController {
      *                                  finito o no es mayor que cero.
      */
     private double convertirDouble(String valor, String campo) {
-        try {
-            double resultado = Double.parseDouble(valor.trim());
-            if (!Double.isFinite(resultado) || resultado <= 0) {
-                throw new IllegalArgumentException(
-                        campo + " debe ser un número mayor que cero."
-                );
-            }
-            return resultado;
-        } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException(
-                    "Ingrese un valor numérico válido para " + campo + "."
-            );
-        }
+        return Validaciones.convertirMonto(valor, campo);
     }
 
     /**

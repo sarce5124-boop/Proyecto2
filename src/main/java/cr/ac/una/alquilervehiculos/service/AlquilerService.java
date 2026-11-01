@@ -25,9 +25,10 @@ public class AlquilerService {
         if (fechaInicio == null) throw new IllegalArgumentException("Debe seleccionar una fecha de inicio.");
         if (vehiculo.getEstado() != EstadoVehiculo.DISPONIBLE)
             throw new IllegalStateException("El vehículo no está disponible.");
-        if (dias <= 0) throw new IllegalArgumentException("La cantidad de días debe ser mayor a cero.");
-        if (!Double.isFinite(depositoGarantia) || depositoGarantia <= 0)
-            throw new IllegalArgumentException("El depósito de garantía debe ser mayor a cero.");
+        if (dias < 1 || dias > 365)
+            throw new IllegalArgumentException("La cantidad de días debe estar entre 1 y 365.");
+        Validaciones.montoValido(depositoGarantia, "El depósito de garantía");
+        Validaciones.montoValido(vehiculo.calcularCostoAlquiler(dias), "El costo del alquiler");
         try {
             return alquileres.registrar(cliente, vehiculo, fechaInicio, dias, depositoGarantia);
         } catch (SQLException e) {

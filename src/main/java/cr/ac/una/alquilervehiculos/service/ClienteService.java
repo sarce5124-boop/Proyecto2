@@ -32,22 +32,12 @@ public class ClienteService {
             );
         }
 
-        if (cliente.getIdentificacion() == null
-                || cliente.getIdentificacion().trim().isEmpty()) {
-            throw new IllegalArgumentException(
-                    "La identificación es obligatoria."
-            );
-        }
+        cliente.setIdentificacion(Validaciones.identificacion(cliente.getIdentificacion()));
+        cliente.setNombre(Validaciones.nombre(cliente.getNombre()));
+        cliente.setTelefono(Validaciones.telefono(cliente.getTelefono()));
+        cliente.setCorreo(Validaciones.correo(cliente.getCorreo()));
 
-        if (cliente.getNombre() == null
-                || cliente.getNombre().trim().isEmpty()) {
-            throw new IllegalArgumentException(
-                    "El nombre es obligatorio."
-            );
-        }
-
-        if (buscarPorIdentificacion(
-                cliente.getIdentificacion()) != null) {
+        if (buscarPorIdentificacion(cliente.getIdentificacion()) != null) {
             throw new IllegalArgumentException(
                     "Ya existe un cliente con esa identificación."
             );
@@ -117,11 +107,9 @@ public class ClienteService {
             String telefono,
             String correo) {
 
-        if (nombre == null || nombre.trim().isEmpty()) {
-            throw new IllegalArgumentException(
-                    "El nombre es obligatorio."
-            );
-        }
+        String nombreLimpio = Validaciones.nombre(nombre);
+        String telefonoLimpio = Validaciones.telefono(telefono);
+        String correoLimpio = Validaciones.correo(correo);
 
         Cliente cliente = buscarPorIdentificacion(identificacion);
 
@@ -129,9 +117,9 @@ public class ClienteService {
             return false;
         }
 
-        cliente.setNombre(nombre);
-        cliente.setTelefono(telefono);
-        cliente.setCorreo(correo);
+        cliente.setNombre(nombreLimpio);
+        cliente.setTelefono(telefonoLimpio);
+        cliente.setCorreo(correoLimpio);
 
         try {
             return clientes.actualizar(cliente);
