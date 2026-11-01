@@ -7,6 +7,8 @@ import java.sql.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 /** Repositorio JDBC; cada alquiler/devolución actualiza el vehículo atómicamente. */
 public class AlquilerRepositoryJDBC implements AlquilerRepository {
@@ -48,7 +50,11 @@ public class AlquilerRepositoryJDBC implements AlquilerRepository {
                 vehiculo.setEstado(EstadoVehiculo.ALQUILADO);
                 return new Alquiler(id, cliente, vehiculo, fechaInicio, dias, depositoGarantia);
             } catch (SQLException | RuntimeException e) {
-                conexion.rollback();
+                try {
+                    conexion.rollback();
+                } catch (SQLException errorRollback) {
+                    e.addSuppressed(errorRollback);
+                }
                 throw e;
             }
         }
@@ -85,7 +91,11 @@ public class AlquilerRepositoryJDBC implements AlquilerRepository {
                 conexion.commit();
                 return true;
             } catch (SQLException | RuntimeException e) {
-                conexion.rollback();
+                try {
+                    conexion.rollback();
+                } catch (SQLException errorRollback) {
+                    e.addSuppressed(errorRollback);
+                }
                 throw e;
             }
         }
@@ -96,13 +106,21 @@ public class AlquilerRepositoryJDBC implements AlquilerRepository {
     public List<Alquiler> listar() throws SQLException {
         List<Alquiler> resultado = new ArrayList<>();
         String sql = "SELECT * FROM alquileres ORDER BY id";
-        ClienteRepositoryJDBC clientes = new ClienteRepositoryJDBC();
-        VehiculoRepositoryJDBC vehiculos = new VehiculoRepositoryJDBC();
+        // Consulta una vez cada tabla relacionada, no dos veces por alquiler.
+        Map<String, Cliente> clientes = new HashMap<>();
+        for (Cliente cliente : new ClienteRepositoryJDBC().listar()) {
+            clientes.put(cliente.getIdentificacion(), cliente);
+        }
+        Map<String, Vehiculo> vehiculos = new HashMap<>();
+        for (Vehiculo vehiculo : new VehiculoRepositoryJDBC().listar()) {
+            vehiculos.put(vehiculo.getPlaca(), vehiculo);
+        }
         try (Connection conexion = ConexionBD.conectar();
              PreparedStatement ps = conexion.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
-                resultado.add(convertir(rs, clientes, vehiculos));
+                resultado.add(convertir(rs, clientes.get(rs.getString("cliente_id")),
+                        vehiculos.get(rs.getString("vehiculo_placa"))));
             }
         }
         return resultado;
@@ -117,16 +135,16 @@ public class AlquilerRepositoryJDBC implements AlquilerRepository {
             ps.setInt(1, id);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return null;
-                return convertir(rs, new ClienteRepositoryJDBC(), new VehiculoRepositoryJDBC());
+                Cliente cliente = new ClienteRepositoryJDBC().buscarPorIdentificacion(rs.getString("cliente_id"));
+                Vehiculo vehiculo = new VehiculoRepositoryJDBC().buscarPorPlaca(rs.getString("vehiculo_placa"));
+                return convertir(rs, cliente, vehiculo);
             }
         }
     }
 
     /** Reconstruye el alquiler y preserva su costo de contratación. */
-    private Alquiler convertir(ResultSet rs, ClienteRepositoryJDBC clientes,
-                              VehiculoRepositoryJDBC vehiculos) throws SQLException {
-        Cliente cliente = clientes.buscarPorIdentificacion(rs.getString("cliente_id"));
-        Vehiculo vehiculo = vehiculos.buscarPorPlaca(rs.getString("vehiculo_placa"));
+    private Alquiler convertir(ResultSet rs, Cliente cliente,
+                              Vehiculo vehiculo) throws SQLException {
         if (cliente == null || vehiculo == null) {
             throw new SQLException("Alquiler " + rs.getInt("id") + " con referencias inválidas.");
         }

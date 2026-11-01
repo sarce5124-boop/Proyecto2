@@ -41,7 +41,7 @@ public class VehiculoService {
         try {
             vehiculos.guardar(vehiculo);
         } catch (SQLException e) {
-            throw new IllegalStateException("Error al registrar el vehículo en MySQL.", e);
+            throw ErroresBD.convertir(e, "registrar el vehículo");
         }
     }
 
@@ -51,7 +51,7 @@ public class VehiculoService {
         try {
             return vehiculos.buscarPorPlaca(placa);
         } catch (SQLException e) {
-            throw new IllegalStateException("Error al buscar el vehículo en MySQL.", e);
+            throw ErroresBD.convertir(e, "buscar el vehículo");
         }
     }
 
@@ -60,7 +60,7 @@ public class VehiculoService {
         try {
             return vehiculos.listar();
         } catch (SQLException e) {
-            throw new IllegalStateException("Error al listar los vehículos en MySQL.", e);
+            throw ErroresBD.convertir(e, "consultar los vehículos");
         }
     }
 
@@ -102,7 +102,7 @@ public class VehiculoService {
         try {
             return vehiculos.eliminar(placa);
         } catch (SQLException e) {
-            throw new IllegalStateException("Error al eliminar el vehículo en MySQL.", e);
+            throw ErroresBD.convertir(e, "eliminar el vehículo");
         }
     }
 
@@ -111,7 +111,7 @@ public class VehiculoService {
         try {
             return vehiculos.actualizar(vehiculo);
         } catch (SQLException e) {
-            throw new IllegalStateException("Error al actualizar el vehículo en MySQL.", e);
+            throw ErroresBD.convertir(e, "actualizar el vehículo");
         }
     }
 }

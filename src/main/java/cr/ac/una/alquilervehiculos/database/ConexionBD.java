@@ -8,7 +8,7 @@ import java.sql.SQLException;
 public class ConexionBD {
 
     private static final String URL =
-            "jdbc:mysql://localhost:3306/alquiler_vehiculos";
+            "jdbc:mysql://localhost:3306/alquiler_vehiculos?connectTimeout=5000&socketTimeout=10000";
 
     private static final String USUARIO = "alquiler_app";
 
@@ -22,7 +22,9 @@ public class ConexionBD {
      * @throws SQLException si falla la conexión.
      */
     public static Connection conectar() throws SQLException {
-
+        if (PASSWORD == null || PASSWORD.isBlank()) {
+            throw new SQLException("Falta configurar MYSQL_PASSWORD.", "28000");
+        }
         return DriverManager.getConnection(
                 URL,
                 USUARIO,

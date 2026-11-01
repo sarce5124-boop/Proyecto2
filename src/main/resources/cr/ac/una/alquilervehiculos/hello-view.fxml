@@ -21,6 +21,8 @@
     </padding>
     <Label style="-fx-font-size: 20px; -fx-font-weight: bold;"
            text="Sistema de alquiler de vehículos"/>
+    <Button text="Actualizar datos" onAction="#actualizarListas"/>
+    <Label fx:id="estadoConexionLabel" text="Cargando datos de MySQL..."/>
     <TabPane VBox.vgrow="ALWAYS">
         <Tab closable="false" text="Clientes">
             <VBox spacing="10.0">

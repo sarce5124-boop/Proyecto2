@@ -32,7 +32,7 @@ public class AlquilerService {
         try {
             return alquileres.registrar(cliente, vehiculo, fechaInicio, dias, depositoGarantia);
         } catch (SQLException e) {
-            throw new IllegalStateException("Error al registrar el alquiler en MySQL: " + e.getMessage(), e);
+            throw ErroresBD.convertir(e, "registrar el alquiler");
         }
     }
 
@@ -41,8 +41,9 @@ public class AlquilerService {
         validarAlquiler(alquiler);
         if (fechaDevolucionReal == null)
             throw new IllegalArgumentException("Debe indicar la fecha de devolución.");
+        // Usa la tarifa con la que se contrató el alquiler, no una tarifa modificada después.
         return alquiler.calcularDiasAtraso(fechaDevolucionReal)
-                * alquiler.getVehiculo().getTarifaDiaria();
+                * (alquiler.getCostoAlquiler() / alquiler.getDias());
     }
 
     /** Devuelve el depósito íntegro; la multa se cobra por separado. */
@@ -72,7 +73,7 @@ public class AlquilerService {
             alquiler.getVehiculo().setEstado(EstadoVehiculo.DISPONIBLE);
             return multa;
         } catch (SQLException e) {
-            throw new IllegalStateException("Error al registrar la devolución en MySQL: " + e.getMessage(), e);
+            throw ErroresBD.convertir(e, "registrar la devolución");
         }
     }
 
@@ -81,7 +82,7 @@ public class AlquilerService {
         try {
             return alquileres.listar();
         } catch (SQLException e) {
-            throw new IllegalStateException("Error al listar los alquileres en MySQL: " + e.getMessage(), e);
+            throw ErroresBD.convertir(e, "consultar los alquileres");
         }
     }
 
@@ -106,7 +107,7 @@ public class AlquilerService {
         try {
             return alquileres.buscarPorId(id);
         } catch (SQLException e) {
-            throw new IllegalStateException("Error al buscar el alquiler en MySQL: " + e.getMessage(), e);
+            throw ErroresBD.convertir(e, "buscar el alquiler");
         }
     }
 

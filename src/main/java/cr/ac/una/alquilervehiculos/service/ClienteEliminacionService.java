@@ -1,37 +1,23 @@
 package cr.ac.una.alquilervehiculos.service;
 
-import cr.ac.una.alquilervehiculos.database.ConexionBD;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
+import cr.ac.una.alquilervehiculos.interfaces.ClienteRepository;
+import cr.ac.una.alquilervehiculos.repository.ClienteRepositoryJDBC;
 import java.sql.SQLException;
 
-/** Elimina clientes sin comprometer las referencias de los alquileres. */
+/** Elimina clientes y respeta las llaves foráneas del historial. */
 public class ClienteEliminacionService {
+    private final ClienteRepository clientes = new ClienteRepositoryJDBC();
 
     /** @return true si se eliminó el cliente, false si no existía. */
     public boolean eliminarCliente(String identificacion) {
         if (identificacion == null || identificacion.isBlank()) {
             throw new IllegalArgumentException("La identificación es obligatoria.");
         }
-        try (Connection conexion = ConexionBD.conectar()) {
-            try (PreparedStatement consulta = conexion.prepareStatement(
-                    "SELECT COUNT(*) FROM alquileres WHERE cliente_id = ?")) {
-                consulta.setString(1, identificacion);
-                try (ResultSet resultado = consulta.executeQuery()) {
-                    if (resultado.next() && resultado.getInt(1) > 0) {
-                        throw new IllegalStateException(
-                                "No se puede eliminar: el cliente tiene alquileres registrados en el historial.");
-                    }
-                }
-            }
-            try (PreparedStatement eliminar = conexion.prepareStatement(
-                    "DELETE FROM clientes WHERE identificacion = ?")) {
-                eliminar.setString(1, identificacion);
-                return eliminar.executeUpdate() > 0;
-            }
+        try {
+            // MySQL impide eliminar clientes con alquileres relacionados.
+            return clientes.eliminar(identificacion.trim());
         } catch (SQLException e) {
-            throw new IllegalStateException("No se pudo eliminar el cliente en MySQL: " + e.getMessage(), e);
+            throw ErroresBD.convertir(e, "eliminar el cliente");
         }
     }
 }

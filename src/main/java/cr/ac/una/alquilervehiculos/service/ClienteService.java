@@ -47,9 +47,7 @@ public class ClienteService {
             clientes.guardar(cliente);
 
         } catch (SQLException e) {
-            throw new IllegalStateException(
-                    "Error al registrar el cliente en MySQL.", e
-            );
+            throw ErroresBD.convertir(e, "registrar el cliente");
         }
     }
 
@@ -69,9 +67,7 @@ public class ClienteService {
             return clientes.buscarPorIdentificacion(identificacion);
 
         } catch (SQLException e) {
-            throw new IllegalStateException(
-                    "Error al buscar el cliente en MySQL.", e
-            );
+            throw ErroresBD.convertir(e, "buscar el cliente");
         }
     }
 
@@ -86,9 +82,7 @@ public class ClienteService {
             return clientes.listar();
 
         } catch (SQLException e) {
-            throw new IllegalStateException(
-                    "Error al consultar los clientes en MySQL.", e
-            );
+            throw ErroresBD.convertir(e, "consultar los clientes");
         }
     }
 
@@ -125,9 +119,7 @@ public class ClienteService {
             return clientes.actualizar(cliente);
 
         } catch (SQLException e) {
-            throw new IllegalStateException(
-                    "Error al actualizar el cliente en MySQL.", e
-            );
+            throw ErroresBD.convertir(e, "actualizar el cliente");
         }
     }
 
@@ -148,9 +140,7 @@ public class ClienteService {
             return clientes.eliminar(identificacion);
 
         } catch (SQLException e) {
-            throw new IllegalStateException(
-                    "Error al eliminar el cliente en MySQL.", e
-            );
+            throw ErroresBD.convertir(e, "eliminar el cliente");
         }
     }
 }

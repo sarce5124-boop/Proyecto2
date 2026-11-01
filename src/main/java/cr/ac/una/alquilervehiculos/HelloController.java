@@ -75,6 +75,23 @@ public class HelloController {
     @FXML private ListView<Alquiler> historialAlquileresList;
     private List<Cliente> todosLosClientes = new ArrayList<>();
     private List<Vehiculo> todosLosVehiculos = new ArrayList<>();
+    @FXML private Label estadoConexionLabel;
+    private boolean datosCargados = false;
+    private int numeroCarga = 0;
+
+    /** Conjunto de datos que el hilo de MySQL devuelve a JavaFX de una sola vez. */
+    private static class DatosSistema {
+        private final List<Cliente> clientes;
+        private final List<Vehiculo> vehiculos;
+        private final List<Alquiler> alquileres;
+
+        private DatosSistema(List<Cliente> clientes, List<Vehiculo> vehiculos,
+                             List<Alquiler> alquileres) {
+            this.clientes = clientes;
+            this.vehiculos = vehiculos;
+            this.alquileres = alquileres;
+        }
+    }
 
     // Controles de la sección de alquileres.
     @FXML
@@ -167,6 +184,7 @@ public class HelloController {
     @FXML
     private void registrarCliente() {
         try {
+            comprobarDatosCargados();
             validarTexto(identificacionField.getText(), "la identificación");
             validarTexto(nombreField.getText(), "el nombre");
 
@@ -196,6 +214,7 @@ public class HelloController {
     @FXML
     private void registrarVehiculo() {
         try {
+            comprobarDatosCargados();
             String tipo = tipoVehiculoCombo.getValue();
             if (tipo == null || !tipoVehiculoCombo.getItems().contains(tipo)) {
                 throw new IllegalArgumentException("Seleccione un tipo de vehículo válido.");
@@ -243,6 +262,7 @@ public class HelloController {
     @FXML
     private void registrarAlquiler() {
         try {
+            comprobarDatosCargados();
             if (clienteAlquilerCombo.getValue() == null
                     || !clienteAlquilerCombo.getItems().contains(clienteAlquilerCombo.getValue())) {
                 throw new IllegalArgumentException("Debe seleccionar un cliente válido.");
@@ -336,6 +356,7 @@ public class HelloController {
     @FXML
     private void devolverVehiculo() {
         try {
+            comprobarDatosCargados();
             if (devolucionCombo.getValue() == null
                     || !devolucionCombo.getItems().contains(devolucionCombo.getValue())) {
                 throw new IllegalArgumentException("Debe seleccionar un alquiler activo válido.");
@@ -406,50 +427,76 @@ public class HelloController {
      * servicios, incluyendo únicamente vehículos disponibles y alquileres
      * activos en las secciones correspondientes.
      */
+    @FXML
     private void actualizarListas() {
-        todosLosVehiculos = new ArrayList<>(vehiculoService.listarVehiculos());
-        filtrarVehiculos();
-        cargarClientesAsync();
-        vehiculoAlquilerCombo.getItems().setAll(vehiculoService.listarDisponibles());
-        alquileresActivosList.getItems().setAll(
-                alquilerService.listarAlquileresActivos()
-        );
-        devolucionCombo.getItems().setAll(
-                alquilerService.listarAlquileresActivos()
-        );
-        historialAlquileresList.getItems().setAll(alquilerService.listarAlquileres());
-        actualizarTotalAlquiler();
-        calcularDevolucion();
-    }
+        final int solicitud = ++numeroCarga;
+        datosCargados = false;
+        estadoConexionLabel.setText("Cargando datos de MySQL...");
 
-    /**
-     * Carga los clientes desde MySQL en un hilo secundario.
-     * Los controles JavaFX se actualizan únicamente al finalizar la tarea.
-     */
-    private void cargarClientesAsync() {
-        Task<List<Cliente>> tarea = new Task<>() {
+        // La consulta de MySQL nunca se hace dentro del hilo gráfico de JavaFX.
+        Task<DatosSistema> tarea = new Task<>() {
             @Override
-            protected List<Cliente> call() {
-                return clienteService.listarClientes();
+            protected DatosSistema call() {
+                List<Cliente> clientes = clienteService.listarClientes();
+                List<Vehiculo> vehiculos = vehiculoService.listarVehiculos();
+                List<Alquiler> alquileres = alquilerService.listarAlquileres();
+                return new DatosSistema(clientes, vehiculos, alquileres);
             }
         };
 
         tarea.setOnSucceeded(event -> {
-            List<Cliente> clientes = tarea.getValue();
-            todosLosClientes = new ArrayList<>(clientes);
+            if (solicitud != numeroCarga) return; // Descarta resultados anteriores.
+            DatosSistema datos = tarea.getValue();
+            todosLosClientes = new ArrayList<>(datos.clientes);
+            todosLosVehiculos = new ArrayList<>(datos.vehiculos);
             filtrarClientes();
-            clienteAlquilerCombo.getItems().setAll(clientes);
+            filtrarVehiculos();
+            clienteAlquilerCombo.getItems().setAll(datos.clientes);
+            vehiculoAlquilerCombo.getItems().setAll(datos.vehiculos.stream()
+                    .filter(v -> v.getEstado() == cr.ac.una.alquilervehiculos.model.EstadoVehiculo.DISPONIBLE)
+                    .toList());
+            List<Alquiler> activos = datos.alquileres.stream()
+                    .filter(a -> !a.isFinalizado()).toList();
+            alquileresActivosList.getItems().setAll(activos);
+            devolucionCombo.getItems().setAll(activos);
+            historialAlquileresList.getItems().setAll(datos.alquileres);
+            datosCargados = true;
+            estadoConexionLabel.setText("Datos actualizados correctamente.");
+            actualizarTotalAlquiler();
+            calcularDevolucion();
         });
 
         tarea.setOnFailed(event -> {
+            if (solicitud != numeroCarga) return;
+            datosCargados = false;
+            todosLosClientes.clear();
+            todosLosVehiculos.clear();
+            clientesList.getItems().clear();
+            vehiculosList.getItems().clear();
+            clienteAlquilerCombo.getItems().clear();
+            vehiculoAlquilerCombo.getItems().clear();
+            alquileresActivosList.getItems().clear();
+            devolucionCombo.getItems().clear();
+            historialAlquileresList.getItems().clear();
+            estadoConexionLabel.setText("Sin datos. Verifique MySQL y pulse Actualizar datos.");
             Throwable error = tarea.getException();
-            mostrarError("No se pudieron cargar los clientes: "
-                    + (error == null ? "Error desconocido" : error.getMessage()));
+            String mensaje = error == null || error.getMessage() == null
+                    ? "No se pudieron consultar los datos en MySQL."
+                    : error.getMessage();
+            mostrarError(mensaje + "\nVerifique MySQL y pulse Actualizar datos.");
         });
 
-        Thread hilo = new Thread(tarea, "cargar-clientes-mysql");
+        Thread hilo = new Thread(tarea, "cargar-datos-mysql");
         hilo.setDaemon(true);
         hilo.start();
+    }
+
+    /** No permite operar con registros desconocidos o durante una actualización. */
+    private void comprobarDatosCargados() {
+        if (!datosCargados) {
+            throw new IllegalStateException(
+                    "Los datos todavía no están disponibles. Pulse Actualizar datos.");
+        }
     }
 
 
@@ -457,6 +504,10 @@ public class HelloController {
     /** Permite modificar nombre, teléfono y correo sin cambiar la identificación. */
     @FXML
     private void editarCliente() {
+        if (!datosCargados) {
+            mostrarError("Los datos todavía no están disponibles. Pulse Actualizar datos.");
+            return;
+        }
         Cliente seleccionado = clientesList.getSelectionModel().getSelectedItem();
         if (seleccionado == null) {
             mostrarError("Seleccione primero un cliente de la lista.");
@@ -509,6 +560,10 @@ public class HelloController {
     /** Modifica marca y tarifa diaria sin alterar placa, subtipo o disponibilidad. */
     @FXML
     private void editarVehiculo() {
+        if (!datosCargados) {
+            mostrarError("Los datos todavía no están disponibles. Pulse Actualizar datos.");
+            return;
+        }
         Vehiculo seleccionado = vehiculosList.getSelectionModel().getSelectedItem();
         if (seleccionado == null) {
             mostrarError("Seleccione primero un vehículo de la lista.");
@@ -559,6 +614,10 @@ public class HelloController {
     /** Elimina de MySQL el cliente seleccionado, previa confirmación. */
     @FXML
     private void eliminarCliente() {
+        if (!datosCargados) {
+            mostrarError("Los datos todavía no están disponibles. Pulse Actualizar datos.");
+            return;
+        }
         Cliente seleccionado = clientesList.getSelectionModel().getSelectedItem();
         if (seleccionado == null) {
             mostrarError("Seleccione primero un cliente de la lista.");
@@ -584,6 +643,10 @@ public class HelloController {
     /** Elimina un vehículo disponible sin historial, previa confirmación. */
     @FXML
     private void eliminarVehiculo() {
+        if (!datosCargados) {
+            mostrarError("Los datos todavía no están disponibles. Pulse Actualizar datos.");
+            return;
+        }
         Vehiculo seleccionado = vehiculosList.getSelectionModel().getSelectedItem();
         if (seleccionado == null) {
             mostrarError("Seleccione primero un vehículo de la lista.");
