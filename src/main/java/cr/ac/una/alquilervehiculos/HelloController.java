@@ -1,5 +1,6 @@
 package cr.ac.una.alquilervehiculos;
 
+import cr.ac.una.alquilervehiculos.network.SyncManager;
 import cr.ac.una.alquilervehiculos.model.Alquiler;
 import cr.ac.una.alquilervehiculos.model.Bicimoto;
 import cr.ac.una.alquilervehiculos.model.Cliente;
@@ -11,6 +12,7 @@ import cr.ac.una.alquilervehiculos.service.ClienteService;
 import cr.ac.una.alquilervehiculos.service.ClienteEliminacionService;
 import cr.ac.una.alquilervehiculos.service.VehiculoService;
 import cr.ac.una.alquilervehiculos.service.Validaciones;
+import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.event.ActionEvent;
 import javafx.concurrent.Task;
@@ -40,6 +42,11 @@ public class HelloController {
     private final ClienteService clienteService = new ClienteService();
     private final ClienteEliminacionService clienteEliminacionService = new ClienteEliminacionService();
     private final AlquilerService alquilerService = new AlquilerService();
+
+    // Recibe avisos de otras ventanas y actualiza los datos desde MySQL.
+    private final SyncManager syncManager = new SyncManager(
+            evento -> Platform.runLater(this::actualizarListas)
+    );
 
     // Controles de la sección de inventario.
     @FXML
@@ -171,6 +178,7 @@ public class HelloController {
         buscarClienteField.textProperty().addListener((obs, anterior, actual) -> filtrarClientes());
         buscarVehiculoField.textProperty().addListener((obs, anterior, actual) -> filtrarVehiculos());
         actualizarListas();
+        syncManager.iniciar();
     }
 
     /**
@@ -196,6 +204,7 @@ public class HelloController {
             );
             clienteService.registrarCliente(cliente);
             limpiarCamposCliente();
+            syncManager.notificarCambio("CLIENTE", "CREAR");
             actualizarListas();
             mostrarInformacion("Cliente registrado correctamente.");
         } catch (RuntimeException exception) {
@@ -244,6 +253,7 @@ public class HelloController {
 
             vehiculoService.registrarVehiculo(vehiculo);
             limpiarCamposVehiculo();
+            syncManager.notificarCambio("VEHICULO", "CREAR");
             actualizarListas();
             mostrarInformacion("Vehículo registrado correctamente.");
         } catch (RuntimeException exception) {
@@ -291,6 +301,7 @@ public class HelloController {
                     diasSpinner.getValue(),
                     deposito
             );
+            syncManager.notificarCambio("ALQUILER", "CREAR");
             actualizarListas();
             mostrarInformacion(
                     "Alquiler #" + alquiler.getId()
@@ -371,6 +382,7 @@ public class HelloController {
             double multa = alquilerService.devolverVehiculo(
                     alquiler, fechaDevolucionPicker.getValue()
             );
+            syncManager.notificarCambio("ALQUILER", "DEVOLVER");
             actualizarListas();
             mostrarInformacion(
                     "Devolución registrada. Multa cobrada: "
@@ -549,6 +561,7 @@ public class HelloController {
         });
         if (dialogo.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
             try {
+                syncManager.notificarCambio("CLIENTE", "EDITAR");
                 actualizarListas();
                 mostrarInformacion("Cliente actualizado correctamente en MySQL.");
             } catch (RuntimeException e) {
@@ -603,6 +616,7 @@ public class HelloController {
         });
         if (dialogo.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
             try {
+                syncManager.notificarCambio("VEHICULO", "EDITAR");
                 actualizarListas();
                 mostrarInformacion("Vehículo actualizado correctamente en MySQL.");
             } catch (RuntimeException e) {
@@ -633,6 +647,7 @@ public class HelloController {
                 mostrarError("El cliente ya no existe en MySQL.");
                 return;
             }
+            syncManager.notificarCambio("CLIENTE", "ELIMINAR");
             actualizarListas();
             mostrarInformacion("Cliente eliminado correctamente.");
         } catch (RuntimeException e) {
@@ -662,6 +677,7 @@ public class HelloController {
                 mostrarError("El vehículo ya no existe en MySQL.");
                 return;
             }
+            syncManager.notificarCambio("VEHICULO", "ELIMINAR");
             actualizarListas();
             mostrarInformacion("Vehículo eliminado correctamente.");
         } catch (RuntimeException e) {
