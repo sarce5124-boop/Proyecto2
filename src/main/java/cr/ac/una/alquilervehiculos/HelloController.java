@@ -2,12 +2,14 @@ package cr.ac.una.alquilervehiculos;
 
 import cr.ac.una.alquilervehiculos.network.SyncManager;
 import cr.ac.una.alquilervehiculos.model.Alquiler;
+import cr.ac.una.alquilervehiculos.model.BitacoraError;
 import cr.ac.una.alquilervehiculos.model.Bicimoto;
 import cr.ac.una.alquilervehiculos.model.Cliente;
 import cr.ac.una.alquilervehiculos.model.Cuadraciclo;
 import cr.ac.una.alquilervehiculos.model.Moto;
 import cr.ac.una.alquilervehiculos.model.Vehiculo;
 import cr.ac.una.alquilervehiculos.service.AlquilerService;
+import cr.ac.una.alquilervehiculos.service.BitacoraService;
 import cr.ac.una.alquilervehiculos.service.ClienteService;
 import cr.ac.una.alquilervehiculos.service.ClienteEliminacionService;
 import cr.ac.una.alquilervehiculos.service.VehiculoService;
@@ -42,6 +44,10 @@ public class HelloController {
     private final ClienteService clienteService = new ClienteService();
     private final ClienteEliminacionService clienteEliminacionService = new ClienteEliminacionService();
     private final AlquilerService alquilerService = new AlquilerService();
+    private final BitacoraService bitacoraService = new BitacoraService();
+
+    @FXML
+    private ListView<BitacoraError> bitacoraList;
 
     // Recibe avisos de otras ventanas y actualiza los datos desde MySQL.
     private final SyncManager syncManager = new SyncManager(
@@ -208,6 +214,7 @@ public class HelloController {
             actualizarListas();
             mostrarInformacion("Cliente registrado correctamente.");
         } catch (RuntimeException exception) {
+            bitacoraService.registrarError("Clientes", "Registrar", exception.getMessage());
             mostrarError(exception.getMessage());
         }
     }
@@ -257,6 +264,7 @@ public class HelloController {
             actualizarListas();
             mostrarInformacion("Vehículo registrado correctamente.");
         } catch (RuntimeException exception) {
+            bitacoraService.registrarError("Inventario", "Registrar", exception.getMessage());
             mostrarError(exception.getMessage());
         }
     }
@@ -555,6 +563,7 @@ public class HelloController {
                     evento.consume();
                 }
             } catch (RuntimeException e) {
+                bitacoraService.registrarError("Clientes", "Editar", e.getMessage());
                 mostrarError(e.getMessage());
                 evento.consume(); // Conserva el formulario para que se corrijan los datos.
             }
@@ -610,6 +619,7 @@ public class HelloController {
                     evento.consume();
                 }
             } catch (RuntimeException e) {
+                bitacoraService.registrarError("Inventario", "Editar", e.getMessage());
                 mostrarError(e.getMessage());
                 evento.consume(); // Permite corregir la tarifa o la marca.
             }
@@ -816,4 +826,27 @@ public class HelloController {
         alert.setContentText(mensaje == null ? "Ocurrió un error." : mensaje);
         alert.showAndWait();
     }
+    // Consulta los errores de Clientes e Inventario sin bloquear JavaFX.
+    @FXML
+    private void actualizarBitacora() {
+        Task<List<BitacoraError>> tarea = new Task<>() {
+            @Override
+            protected List<BitacoraError> call() {
+                return bitacoraService.listarErrores();
+            }
+        };
+
+        tarea.setOnSucceeded(event -> {
+            if (bitacoraList != null) {
+                bitacoraList.getItems().setAll(tarea.getValue());
+            }
+        });
+
+        tarea.setOnFailed(event -> mostrarError("No se pudo actualizar la bitácora."));
+
+        Thread hilo = new Thread(tarea, "cargar-bitacora");
+        hilo.setDaemon(true);
+        hilo.start();
+    }
+
 }
